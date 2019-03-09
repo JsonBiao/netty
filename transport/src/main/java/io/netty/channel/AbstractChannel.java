@@ -475,10 +475,11 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 return;
             }
 
-            AbstractChannel.this.eventLoop = eventLoop;
+            AbstractChannel.this.eventLoop = eventLoop; //绑定为该channel选的的EventLoop
 
+            //必须保证注册是由该EventLoop发起的，否则会单独封装成一个Task，由该EventLoop执行
             if (eventLoop.inEventLoop()) {
-                register0(promise);
+                register0(promise); //注册
             } else {
                 try {
                     eventLoop.execute(new Runnable() {
@@ -506,7 +507,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                     return;
                 }
                 boolean firstRegistration = neverRegistered;
-                doRegister();
+                doRegister(); // 最底层的注册调用
                 neverRegistered = false;
                 registered = true;
 
@@ -514,13 +515,13 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 // user may already fire events through the pipeline in the ChannelFutureListener.
                 pipeline.invokeHandlerAddedIfNeeded();
 
-                safeSetSuccess(promise);
-                pipeline.fireChannelRegistered();
+                safeSetSuccess(promise); // 设置注册结果为成功
+                pipeline.fireChannelRegistered(); //发起pipeline调用fireChannelRegistered（head.fireChannelRegistered）,回调注册的ChannelInitializer
                 // Only fire a channelActive if the channel has never been registered. This prevents firing
                 // multiple channel actives if the channel is deregistered and re-registered.
                 if (isActive()) {
-                    if (firstRegistration) {
-                        pipeline.fireChannelActive();
+                    if (firstRegistration) { //如果是首次注册，而且channel已经处于Active状态（如果是服务端，表示listen成功，如果是客户端，便是connect成功）
+                        pipeline.fireChannelActive(); // 发起pipeline的fireChannelActive
                     } else if (config().isAutoRead()) {
                         // This channel was registered before and autoRead() is set. This means we need to begin read
                         // again so that we process inbound data.

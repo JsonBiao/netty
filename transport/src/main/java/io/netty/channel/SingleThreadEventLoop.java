@@ -77,6 +77,7 @@ public abstract class SingleThreadEventLoop extends SingleThreadEventExecutor im
     @Override
     public ChannelFuture register(final ChannelPromise promise) {
         ObjectUtil.checkNotNull(promise, "promise");
+        // unsafe() 如果client端 NioByteUnsafe, server端 NioMessageUnsafe
         promise.channel().unsafe().register(this, promise);
         return promise;
     }

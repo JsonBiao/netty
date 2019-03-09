@@ -48,7 +48,7 @@ import java.util.Map;
  * transports such as datagram (UDP).</p>
  */
 public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C extends Channel> implements Cloneable {
-
+    //以下都是针对服务端NioServerSocketChannel的
     volatile EventLoopGroup group;
     @SuppressWarnings("deprecation")
     private volatile ChannelFactory<? extends C> channelFactory;
@@ -103,7 +103,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         if (channelClass == null) {
             throw new NullPointerException("channelClass");
         }
-        return channelFactory(new ReflectiveChannelFactory<C>(channelClass));
+        return channelFactory(new ReflectiveChannelFactory<C>(channelClass)); //设置channel工厂
     }
 
     /**
@@ -279,16 +279,17 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     }
 
     private ChannelFuture doBind(final SocketAddress localAddress) {
-        final ChannelFuture regFuture = initAndRegister();
+        final ChannelFuture regFuture = initAndRegister(); // 初始化并注册一个channel
         final Channel channel = regFuture.channel();
         if (regFuture.cause() != null) {
             return regFuture;
         }
 
+        //等待注册成功
         if (regFuture.isDone()) {
             // At this point we know that the registration was complete and successful.
             ChannelPromise promise = channel.newPromise();
-            doBind0(regFuture, channel, localAddress, promise);
+            doBind0(regFuture, channel, localAddress, promise); //执行channel.bind()
             return promise;
         } else {
             // Registration future is almost always fulfilled already, but just in case it's not.
@@ -317,8 +318,8 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     final ChannelFuture initAndRegister() {
         Channel channel = null;
         try {
-            channel = channelFactory.newChannel();
-            init(channel);
+            channel = channelFactory.newChannel(); //还记得前面我们设置过channel工厂么，终于排上用场了
+            init(channel); //初始化channel（就是NioServerSocketChannel）
         } catch (Throwable t) {
             if (channel != null) {
                 // channel can be null if newChannel crashed (eg SocketException("too many open files"))
@@ -330,7 +331,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             return new DefaultChannelPromise(new FailedChannel(), GlobalEventExecutor.INSTANCE).setFailure(t);
         }
 
-        ChannelFuture regFuture = config().group().register(channel);
+        ChannelFuture regFuture = config().group().register(channel); // 向EventLoopGroup中注册一个channel
         if (regFuture.cause() != null) {
             if (channel.isRegistered()) {
                 channel.close();
@@ -378,7 +379,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         if (handler == null) {
             throw new NullPointerException("handler");
         }
-        this.handler = handler;
+        this.handler = handler; // 设置的是父类AbstractBootstrap里的成员，也就是该handler是被NioServerSocketChannel使用
         return self();
     }
 

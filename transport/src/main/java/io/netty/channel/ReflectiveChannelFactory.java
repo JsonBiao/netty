@@ -41,7 +41,7 @@ public class ReflectiveChannelFactory<T extends Channel> implements ChannelFacto
     @Override
     public T newChannel() {
         try {
-            return constructor.newInstance();
+            return constructor.newInstance(); // 反射的方式创建Channel
         } catch (Throwable t) {
             throw new ChannelException("Unable to create Channel from class " + constructor.getDeclaringClass(), t);
         }

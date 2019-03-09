@@ -38,12 +38,14 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * {@link Bootstrap} sub-class which allows easy bootstrap of {@link ServerChannel}
+ * Builder模式创建ServerBootStrap
  *
  */
 public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerChannel> {
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(ServerBootstrap.class);
 
+    // 以下都是针对NioSocketChannel的
     private final Map<ChannelOption<?>, Object> childOptions = new LinkedHashMap<ChannelOption<?>, Object>();
     private final Map<AttributeKey<?>, Object> childAttrs = new LinkedHashMap<AttributeKey<?>, Object>();
     private final ServerBootstrapConfig config = new ServerBootstrapConfig(this);
@@ -78,14 +80,14 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
      * {@link Channel}'s.
      */
     public ServerBootstrap group(EventLoopGroup parentGroup, EventLoopGroup childGroup) {
-        super.group(parentGroup);
+        super.group(parentGroup); // 设置BOSS线程组（在AbstractBootstrap中）
         if (childGroup == null) {
             throw new NullPointerException("childGroup");
         }
         if (this.childGroup != null) {
             throw new IllegalStateException("childGroup set already");
         }
-        this.childGroup = childGroup;
+        this.childGroup = childGroup; // 设置WORK线程组
         return this;
     }
 
@@ -103,7 +105,7 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
                 childOptions.remove(childOption);
             }
         } else {
-            synchronized (childOptions) {
+                synchronized (childOptions) {
                 childOptions.put(childOption, value);
             }
         }
@@ -128,6 +130,8 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
 
     /**
      * Set the {@link ChannelHandler} which is used to serve the request for the {@link Channel}'s.
+     * 分清.handler和.childHandler的区别，首先，两者都是设置一个Handler，但是，前者设置的Handler是属于服务端NioServerSocketChannel的，
+     * 而后者设置的Handler是属于每一个新建的NioSocketChannel的（每当有一个来自客户端的连接时，否会创建一个新的NioSocketChannel）
      */
     public ServerBootstrap childHandler(ChannelHandler childHandler) {
         if (childHandler == null) {
@@ -141,7 +145,7 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
     void init(Channel channel) throws Exception {
         final Map<ChannelOption<?>, Object> options = options0();
         synchronized (options) {
-            setChannelOptions(channel, options, logger);
+            setChannelOptions(channel, options, logger); //设置之前配置的channel选项
         }
 
         final Map<AttributeKey<?>, Object> attrs = attrs0();
@@ -149,12 +153,13 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
             for (Entry<AttributeKey<?>, Object> e: attrs.entrySet()) {
                 @SuppressWarnings("unchecked")
                 AttributeKey<Object> key = (AttributeKey<Object>) e.getKey();
-                channel.attr(key).set(e.getValue());
+                channel.attr(key).set(e.getValue()); // 设置之前配置的属性
             }
         }
 
-        ChannelPipeline p = channel.pipeline();
+        ChannelPipeline p = channel.pipeline(); // 获取channel绑定的pipeline（pipeline实在channel创建的时候创建并绑定的）
 
+        // 开始准备child用到的4个part，因为接下来就要使用它们。
         final EventLoopGroup currentChildGroup = childGroup;
         final ChannelHandler currentChildHandler = childHandler;
         final Entry<ChannelOption<?>, Object>[] currentChildOptions;
@@ -166,20 +171,21 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
             currentChildAttrs = childAttrs.entrySet().toArray(newAttrArray(0));
         }
 
+        // 为NioServerSocketChannel的pipeline添加一个初始化Handler,当NioServerSocketChannel在EventLoop注册成功时，该handler的init方法将被调用
         p.addLast(new ChannelInitializer<Channel>() {
             @Override
             public void initChannel(final Channel ch) throws Exception {
                 final ChannelPipeline pipeline = ch.pipeline();
                 ChannelHandler handler = config.handler();
-                if (handler != null) {
-                    pipeline.addLast(handler);
+                if (handler != null) { // 如果用户配置过Handler
+                    pipeline.addLast(handler); // 为NioServerSocketChannel绑定的pipeline添加Handler
                 }
 
                 ch.eventLoop().execute(new Runnable() {
                     @Override
                     public void run() {
-                        pipeline.addLast(new ServerBootstrapAcceptor(
-                                ch, currentChildGroup, currentChildHandler, currentChildOptions, currentChildAttrs));
+                        pipeline.addLast(new ServerBootstrapAcceptor( //为NioServerSocketChannel的pipeline添加ServerBootstrapAcceptor处理器
+                                ch, currentChildGroup, currentChildHandler, currentChildOptions, currentChildAttrs));  //该Handler主要用来将新创建的NioSocketChannel注册到EventLoopGroup中
                     }
                 });
             }
